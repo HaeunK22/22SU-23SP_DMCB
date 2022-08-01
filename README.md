@@ -6,5 +6,5 @@
 ## Classifier
 ### Support Vector Machine.ipynb <img src="https://img.shields.io/badge/sklearn-F7931E?style=flat&logo=scikit-learn&logoColor=white"/>
 ### Random Forest.ipynb <img src="https://img.shields.io/badge/sklearn-F7931E?style=flat&logo=scikit-learn&logoColor=white"/>
-### Neural Network.ipynb
+### Neural Network.ipynb <img src="https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=PyTorch&logoColor=white"/>
 ### Boxplot.ipynb
