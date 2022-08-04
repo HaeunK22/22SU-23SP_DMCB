@@ -27,7 +27,6 @@ normal_expr_ptn_coding <- norm_expdat@assays@data$fpkm_uq_unstrand[protein_codin
 
 
 # norm_expdat@colData$sample
-
 # norm_expdat@colData$patient
 
 # Download Tumor data
