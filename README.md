@@ -1,5 +1,5 @@
 # 22SU_intern
-## Gene enrichment.R <img src="https://img.shields.io/badge/Bioinformatics-276DC3?style=flat&logo=R&logoColor=white"/>
+## Gene Enrichment.R <img src="https://img.shields.io/badge/Bioinformatics-276DC3?style=flat&logo=R&logoColor=white"/>
 ## Dimension Reduction
 ### Prinicple Component Analyisis.ipynb <img src="https://img.shields.io/badge/sklearn-F7931E?style=flat&logo=scikit-learn&logoColor=white"/>
 ### t-distributed Stochastic Neighbor Embedding.ipynb <img src="https://img.shields.io/badge/sklearn-F7931E?style=flat&logo=scikit-learn&logoColor=white"/>
