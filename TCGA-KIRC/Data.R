@@ -1,7 +1,8 @@
 library(TCGAbiolinks)
 setwd("D:/TCGA/")
 
-# Kidney renal clear cell carcinoma 
+# Kidney renal clear cell carcinoma
+# Download Normal Tissue data
 normal_query <- GDCquery(
   project = "TCGA-KIRC", 
   data.category = "Transcriptome Profiling", 
@@ -11,24 +12,25 @@ normal_query <- GDCquery(
 
 GDCdownload(normal_query)
 
-expdat <- GDCprepare(
+norm_expdat <- GDCprepare(
   query = normal_query,
   save = TRUE, 
-  save.filename = "exp.rda"
+  save.filename = "norm_exp.rda"
 )
 
 
-dim(expdat@assays@data$fpkm_uq_unstrand)  #60660 72
+dim(norm_expdat@assays@data$fpkm_uq_unstrand)  #60660 72
 
-protein_coding_idx <- which(expdat@rowRanges$gene_type == "protein_coding")
-
-normal_expr_ptn_coding <- expdat@assays@data$fpkm_uq_unstrand[protein_coding_idx,]
-
-expdat@colData$sample
-
-expdat@colData$patient
+# Extract protein coding data
+protein_coding_idx <- which(norm_expdat@rowRanges$gene_type == "protein_coding")
+normal_expr_ptn_coding <- norm_expdat@assays@data$fpkm_uq_unstrand[protein_coding_idx,]
 
 
+# norm_expdat@colData$sample
+
+# norm_expdat@colData$patient
+
+# Download Tumor data
 tumor_query <- GDCquery(
   project = "TCGA-KIRC", 
   data.category = "Transcriptome Profiling", 
@@ -54,18 +56,19 @@ for (patient in expdat@colData$patient){
   idx <- c(idx, tmp)
 }
 
-idx <- sapply(expdat@colData$patient, function(arg) which(tum_expdat@colData$patient == arg))
-
-
+# 한줄로 처리하기
+# idx <- sapply(expdat@colData$patient, function(arg) which(tum_expdat@colData$patient == arg))
 
 length(idx)
 tumor_paired <- tum_expdat[,idx]
 dim(tumor_paired@assays@data$fpkm_uq_unstrand)  #60660 72
 
-# Protein coding 
+# Extract protein coding data
 tumor_protein_coding_idx <- which(tumor_paired@rowRanges$gene_type == "protein_coding")
 
 tumor_expr_ptn_coding <- tumor_paired@assays@data$fpkm_uq_unstrand[tumor_protein_coding_idx,]
+
+# apply function 사용법 예시
 # rm_idx <- which(apply(tumor_expr_ptn_coding, 1, sd) == 0)
 
 
