@@ -70,5 +70,14 @@ tumor_expr_ptn_coding <- tumor_paired@assays@data$fpkm_uq_unstrand[tumor_protein
 # apply function 사용법 예시
 # rm_idx <- which(apply(tumor_expr_ptn_coding, 1, sd) == 0)
 
+# clinical data
+clinical <- fread("kirc_tcga_clinical_data.tsv")
 
+# Expr에 있는 사람들이 모두 clinical에 있는지 확인
+all(expdat@colData$patient %in% clinical$`Patient ID`)
+
+# Clinical data의 사람 순서를 expression data의 순서에 맞추기
+idx <- sapply(expdat@colData$patient, function(arg) which(clinical$`Patient ID` == arg))
+length(idx)   # Expression data의 개수와 같은 지 확인
+clinical_core  <- clinical[idx,]
 
