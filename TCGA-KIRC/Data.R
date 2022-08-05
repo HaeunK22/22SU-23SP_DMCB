@@ -19,7 +19,7 @@ norm_expdat <- GDCprepare(
 )
 
 
-dim(norm_expdat@assays@data$fpkm_uq_unstrand)  #60660 72
+dim(norm_expdat@assays@data$fpkm_uq_unstrand)  # Output : 60660 72
 
 # Extract protein coding data
 protein_coding_idx <- which(norm_expdat@rowRanges$gene_type == "protein_coding")
@@ -45,7 +45,7 @@ tum_expdat <- GDCprepare(
   save.filename = "tum_exp.rda"
 )
 
-dim(tum_expdat@assays@data$fpkm_uq_unstrand)  #60660 540
+dim(tum_expdat@assays@data$fpkm_uq_unstrand)  # Output : 60660 540
 
 # Extracting paired data
 tum_expdat@colData$patient
@@ -60,7 +60,7 @@ for (patient in expdat@colData$patient){
 
 length(idx)
 tumor_paired <- tum_expdat[,idx]
-dim(tumor_paired@assays@data$fpkm_uq_unstrand)  #60660 72
+dim(tumor_paired@assays@data$fpkm_uq_unstrand)  # Output : 60660 72
 
 # Extract protein coding data
 tumor_protein_coding_idx <- which(tumor_paired@rowRanges$gene_type == "protein_coding")
