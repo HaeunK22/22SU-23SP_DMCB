@@ -26,7 +26,7 @@ for (i in 1:ncol(normal_expr_ptn_coding)){
   distance <- c(distance, tmp)
 }
 
-# Distance and Metastasis
+# Distance and Metastasis(전이)
 metastasis <- clinical_core$`American Joint Committee on Cancer Metastasis Stage Code`
 metastasis_distance <- cbind(distance, metastasis)
 
