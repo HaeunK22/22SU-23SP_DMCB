@@ -3,7 +3,7 @@
 ## TCGA-KIRC <img src="https://img.shields.io/badge/Bioinformatics-276DC3?style=flat&logo=R&logoColor=white"/>
 Use TCGA-KIRC dataset to check if there exists a relationship between the pca distance and metastasis
 ### Data.R <img src="https://img.shields.io/badge/Data download and preprocessing-276DC3?style=flat&logo=R&logoColor=white"/>
-### PCA_distance.R <img src="https://img.shields.io/badge/PCA and t-test-276DC3?style=flat&logo=R&logoColor=white"/>
+### PCA_distance.R <img src="https://img.shields.io/badge/PCA and ttest-276DC3?style=flat&logo=R&logoColor=white"/>
 ## Dimension Reduction
 ### Prinicple Component Analyisis.ipynb <img src="https://img.shields.io/badge/sklearn-F7931E?style=flat&logo=scikit-learn&logoColor=white"/>
 ### t-distributed Stochastic Neighbor Embedding.ipynb <img src="https://img.shields.io/badge/sklearn-F7931E?style=flat&logo=scikit-learn&logoColor=white"/>
