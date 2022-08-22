@@ -35,7 +35,7 @@ class Coxnnet(nn.Module):
         self.linear_tanh_stack = nn.Sequential(
             torch.nn.Linear(nfeat, self.hidden_dim),
             torch.nn.Tanh(),
-            torch.nn.Dropout(p=0.5)
+            torch.nn.Dropout(p=0.5),
             torch.nn.Linear(self.hidden_dim, 1),
         )
 
