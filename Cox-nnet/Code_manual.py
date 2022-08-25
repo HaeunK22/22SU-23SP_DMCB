@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch import nn
 
-# 수식과 곁들여 이해하기
+# Loss function
 class PartialNLL(torch.nn.Module):
     def __init__(self):
         super(PartialNLL, self).__init__()
@@ -28,7 +28,6 @@ class PartialNLL(torch.nn.Module):
         return loss
 
 
-# 논문에 맞게 수정하기
 class Coxnnet(nn.Module):
     def __init__(self, nfeat, n_hidden):
         super(Coxnnet, self).__init__()
