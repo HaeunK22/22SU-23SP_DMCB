@@ -1,5 +1,6 @@
 # 22SU_intern
 ## Gene Enrichment.R
+Find DEGs using clinical data and gene expression data, and perform gene set enrichment analysis.
 ## TCGA-KIRC
 Use TCGA-KIRC dataset to check if there exists a relationship between the pca distance and metastasis
 #### <img src="https://img.shields.io/badge/Data-276DC3?style=flat&logo=R&logoColor=white"/> Data.R
