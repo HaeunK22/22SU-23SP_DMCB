@@ -28,3 +28,11 @@ How to copy a file from A to B:
 ```console
 scp /path/to/file username@B:/path/to/destination
 ```
+
+### Gene Expression Data(RNA-seq)
+```console
+$ mkdir /mnt/dataA/TCGA/raw/RNA-seq_FPKM-UQ
+$ sudo /opt/gdc-client download \
+  -d /mnt/dataA/TCGA/raw/RNA-seq_FPKM-UQ/ \
+  -m data/gdc_manifest.2019-08-23.txt
+```
