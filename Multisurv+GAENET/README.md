@@ -30,6 +30,8 @@ scp /path/to/file username@B:/path/to/destination
 ```
 
 ### Gene Expression Data(RNA-seq)
+Download gcd-client and use the following code. gcd_manifest.2019-08-23.txt can be found at https://github.com/luisvalesilva/multisurv/blob/master/data/gdc_manifest.2019-08-23.txt
+
 ```console
 $ mkdir /mnt/dataA/TCGA/raw/RNA-seq_FPKM-UQ
 $ sudo /opt/gdc-client download \
