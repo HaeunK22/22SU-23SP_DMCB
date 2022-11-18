@@ -2,7 +2,7 @@
 ![Multisurv+GAENET](https://user-images.githubusercontent.com/69032913/202623549-fb9ec11f-9aa4-48b1-b8a2-bc63ad044af0.PNG)
 ## Data
 ### Clinical Data
-Use the following R code.
+Use the following R code to download data.
 
 ```r
 # Download data for all TCGA projects
