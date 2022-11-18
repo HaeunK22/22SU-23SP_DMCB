@@ -23,7 +23,7 @@ output_path <- '/mnt/dataA/TCGA/raw/clinical_data.tsv'
 readr::write_tsv(data, output_path)
 ```
 
-How to copy a file from A to B
+How to copy a file from A to B:
 ```console
 scp /path/to/file username@B:/path/to/destination
 ```
