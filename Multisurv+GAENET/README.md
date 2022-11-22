@@ -28,7 +28,7 @@ How to copy a file from A to B:
 ```console
 scp /path/to/file username@B:/path/to/destination
 ```
-data preprocessing : [preprocess_clinical.ipynb](Data/preprocess_clinical.ipynb)
+Data preprocessing : [preprocess_clinical.ipynb](Data/preprocess_clinical.ipynb)
 
 ### Gene Expression Data(RNA-seq)
 Download gcd-client and use the following code. gcd_manifest.2019-08-23.txt can be found at https://github.com/luisvalesilva/multisurv/blob/master/data/gdc_manifest.2019-08-23.txt
