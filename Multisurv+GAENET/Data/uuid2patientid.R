@@ -32,7 +32,7 @@ for (uuid in file_uuid){
     print(length(case_id))
   }
 }
-#한 줄로 처리
+# 한 줄로 처리
 # case_id_ <- uuid2caseid$case_ids[unlist(sapply(file_uuid, function(arg) which(uuid2caseid$id == arg)))]
 
 # df = (uuid, case_id)
