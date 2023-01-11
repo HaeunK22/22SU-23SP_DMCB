@@ -1,5 +1,7 @@
-# MLSurv
+# Multisurv+GAENET
 Multisurv : https://github.com/luisvalesilva/multisurv
+
+![Multisurv+GAENET](https://user-images.githubusercontent.com/69032913/202623549-fb9ec11f-9aa4-48b1-b8a2-bc63ad044af0.PNG)
 
 ## Data
 ### Clinical Data
