@@ -2,6 +2,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.model_selection import KFold
 from MLSurv_single import *
 from loss import SurvLoss, latent_loss
 from dataload import Data
@@ -14,8 +15,8 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from lifelines.utils import concordance_index
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--input1', '-i1', type=str, default='./../data/RNA_common_sorted.tsv')
-# parser.add_argument('--input2', '-i2', type=str, default='./../data/methyl_common_sort.tsv')
+# parser.add_argument('--input1', '-i1', type=str, default='./../data/RNA_common_sorted.tsv')
+parser.add_argument('--input2', '-i2', type=str, default='./../data/methyl_common_sort.tsv')
 parser.add_argument('--label', '-l', type=str, default='./../data/labels_common.tsv')
 parser.add_argument('--feat_num', '-f', type=int, default=1000)
 
@@ -29,20 +30,19 @@ input_dim = config.feat_num
 
 stdscaler = StandardScaler()
 
-X1 = pd.read_table(config.input1, nrows = input_dim, header=None).transpose()
-# X2 = pd.read_table(config.input2, nrows = config.feat_num).transpose()
-X1 = stdscaler.fit_transform(np.array(X1))
-# X1 = stdscaler.fit_transform(np.array(X2))
+# X1 = pd.read_table(config.input1, nrows = input_dim, header=None).transpose()
+X2 = pd.read_table(config.input2, nrows = config.feat_num).transpose()
+# X1 = stdscaler.fit_transform(np.array(X1))
+X1 = stdscaler.fit_transform(np.array(X2))
 X1 = torch.tensor(X1, dtype = torch.float).to(device)
 
 label = pd.read_table(config.label)
 time, event = torch.tensor(label['time'], dtype=torch.float), torch.tensor(label['event'], dtype=torch.float)
 time, event = time.unsqueeze(1).to(device), event.unsqueeze(1).to(device)
 train_idx, test_idx, _, _ = train_test_split(np.arange(X1.shape[0]), event, test_size = 0.2, random_state = 25)
-# print(f"-------------------------\n type of np.arange(X1.shape[0]): {type(np.arange(X1.shape[0]))}\n type of train_idx : {type(train_idx)}")
-# print(f"np.arange(X1.shape[0]): {np.arange(X1.shape[0])}\n train_idx : {train_idx}")
-# print(f"event: {event}")
 train_idx, val_idx, _, _ = train_test_split(train_idx, event[train_idx], test_size = 0.25, random_state = 1)
+# kf = KFold()
+# for i, (train_idx, test_idx) kf.split(train_idx)
 
 train_X = X1[train_idx, :]
 val_X = X1[val_idx, :]
@@ -69,9 +69,9 @@ model = MLSurv_single(encoder1, decoder1)
 model = model.to(device)
 
 learning_rate = 1e-4
-n_epochs = 300
+n_epochs = 1000
 batch_size = 256
-patience = 20
+patience = 1000
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 mse_loss = nn.MSELoss()
@@ -87,6 +87,10 @@ def train_model(model, patience, n_epochs, optimizer):
     avg_train_losses = []
     # Track average validation loss
     avg_valid_losses = []
+    # Track average c-index for training data
+    avg_train_acc = []
+    # Track average c-index for validation data
+    avg_valid_acc = []
     
     # early_stopping object
     early_stopping = EarlyStopping(patience = patience, verbose = True)
@@ -108,23 +112,13 @@ def train_model(model, patience, n_epochs, optimizer):
         
             # Check train performance
             train_losses.append(loss.item())
-            # print(f"Train loss : {loss.item():>7f}")
-            # probs_by_interval = output.permute(1, 0).detach().cpu().numpy()
-            # c_index = [concordance_index(event_times = time_batch.cpu().detach().numpy(),
-            #                         predicted_scores = interval_probs,
-            #                         event_observed = event_batch.cpu().detach().numpy())
-            #     for interval_probs in probs_by_interval]
-            # recon_error = mse_loss(decoder_, X).item()
-            # latent_error = latent_loss(model.z_mean, model.z_sigma).item()
-            # surv_error = surv_loss.forward(output, time_batch, event_batch, model.output_intervals.double().to(device)).item()
-            # tot_error = recon_error + latent_error + surv_error
             
-            # print(f"Train Accuracy : ")
-            # print(f"Recon: {recon_error:>7f},\
-            # Latent: {latent_error:>7f},\
-            # Surv: {surv_error:>7f},\
-            # Total: {tot_error:>7f},\
-            # Cindex : {np.mean(c_index):>7f}")
+        probs_by_interval = output.permute(1, 0).detach().cpu().numpy()
+        train_c_index = [concordance_index(event_times = time_batch.cpu().detach().numpy(),
+                                     predicted_scores = interval_probs,
+                                     event_observed = event_batch.cpu().detach().numpy())
+                for interval_probs in probs_by_interval]
+            
     
         # validate   
         model.eval()
@@ -134,11 +128,20 @@ def train_model(model, patience, n_epochs, optimizer):
                 latent_loss(model.z_mean, model.z_sigma) + \
                 10*surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
             valid_losses.append(loss.item())
+        probs_by_interval = output.permute(1, 0).detach().cpu().numpy()
+        valid_c_index = [concordance_index(event_times = time_batch.cpu().detach().numpy(),
+                                     predicted_scores = interval_probs,
+                                     event_observed = event_batch.cpu().detach().numpy())
+                for interval_probs in probs_by_interval]
 
         train_loss = np.average(train_losses)
         valid_loss = np.average(valid_losses)
+        train_c_index = np.mean(train_c_index)
+        valid_c_index = np.mean(valid_c_index)
         avg_train_losses.append(train_loss)
         avg_valid_losses.append(valid_loss)
+        avg_train_acc.append(train_c_index)
+        avg_valid_acc.append(valid_c_index)
         
         epoch_len = len(str(n_epochs))
         print_msg = (f'[{epoch:>{epoch_len}}/{n_epochs:>{epoch_len}}] ' +
@@ -160,7 +163,7 @@ def train_model(model, patience, n_epochs, optimizer):
    # best model이 저장되어있는 last checkpoint를 로드한다.
     model.load_state_dict(torch.load('0208_checkpoint.pt'))
     
-    return  model, avg_train_losses, avg_valid_losses
+    return  model, avg_train_losses, avg_valid_losses, avg_train_acc, avg_valid_acc
     
 # iterate over test dataset to check model performance
 def test_loop(dataloader, model):
@@ -198,23 +201,37 @@ def visualize_loss(t_loss, v_loss):
 
     plt.xlabel('epochs')
     plt.ylabel('loss')
-    plt.ylim(1.0, 1.6) # 일정한 scale
-    plt.xlim(0, len(t_loss)+1) # 일정한 scale
+    plt.ylim(0.5, 1.6)
+    plt.xlim(0, len(t_loss)+1)
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
     plt.show()
-    fig.savefig('0208_earlystoppingbyloss_plot.png', bbox_inches = 'tight')
+    fig.savefig('1000_DNAm_loss_plot.png', bbox_inches = 'tight')
+    
+# Visualize c-index     
+def visualize_cindex(t_acc, v_acc):
+    fig = plt.figure(figsize=(10,8))
+    plt.plot(range(1,len(t_acc)+1), t_acc, label='Training C-index')
+    plt.plot(range(1,len(v_acc)+1), v_acc, label='Validation C-index')
+
+    plt.xlabel('epochs')
+    plt.ylabel('c-index')
+    plt.ylim(0.4, 1.0)
+    plt.xlim(0, len(t_acc)+1)
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    fig.savefig('1000_DNAm_c-index_plot.png', bbox_inches = 'tight')
     
 
-# for t in range(epochs):
-#     print(f"Epoch {t+1}/{epochs}")
-#     model.train()
-#     train_loop(train_dataloader, val_dataloader, model, optimizer)
-#     model.eval()
-#     test_loop(test_dataloader, model)
-
-model, train_loss, valid_loss = train_model(model, patience, n_epochs, optimizer)
-# print(f"average train loss : {train_loss}\n average validation loss : {valid_loss}")
+# t_loss_array = []
+# v_loss_array = []
+# for i in range(50):
+#     model, train_loss, valid_loss = train_model(model, patience, n_epochs, optimizer)
+    
+model, train_loss, valid_loss, train_acc, valid_acc = train_model(model, patience, n_epochs, optimizer) 
 visualize_loss(train_loss, valid_loss)
+visualize_cindex(train_acc, valid_acc)
 test_loop(test_dataloader, model)
