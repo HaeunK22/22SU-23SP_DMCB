@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from lifelines.utils import concordance_index
+from pycox.evaluation import EvalSurv
 parser = argparse.ArgumentParser()
 
 # parser.add_argument('--input1', '-i1', type=str, default='./../data/RNA_common_sorted.tsv')
@@ -61,7 +62,7 @@ test_data = Data(test_X, test_time, test_event, device)
 
 train_dataloader = DataLoader(training_data, batch_size = 256)
 val_dataloader = DataLoader(val_data, batch_size = 256)
-test_dataloader = DataLoader(test_data, batch_size = 256)
+test_dataloader = DataLoader(test_data, batch_size = test_idx.size)
 
 encoder1 = Encoder1(input_dim, 256)
 decoder1 = Decoder1(64, 256, input_dim)
@@ -71,7 +72,7 @@ model = model.to(device)
 learning_rate = 1e-4
 n_epochs = 1000
 batch_size = 256
-patience = 1000
+patience = 500
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 mse_loss = nn.MSELoss()
@@ -104,7 +105,6 @@ def train_model(model, patience, n_epochs, optimizer):
             loss = mse_loss(decoder_, X) + \
                 latent_loss(model.z_mean, model.z_sigma) + \
                 10*surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
-            
             # Backpropagation
             optimizer.zero_grad()
             loss.backward()
@@ -118,7 +118,7 @@ def train_model(model, patience, n_epochs, optimizer):
                                      predicted_scores = interval_probs,
                                      event_observed = event_batch.cpu().detach().numpy())
                 for interval_probs in probs_by_interval]
-            
+        
     
         # validate   
         model.eval()
@@ -167,7 +167,7 @@ def train_model(model, patience, n_epochs, optimizer):
     
 # iterate over test dataset to check model performance
 def test_loop(dataloader, model):
-    print("---------------- Start test loop.")
+    print("---------------- Start test -------------------")
     model.eval()
     with torch.no_grad():
         for X1, time_batch, event_batch in dataloader:
@@ -178,6 +178,11 @@ def test_loop(dataloader, model):
                                     predicted_scores = interval_probs,
                                     event_observed = event_batch.cpu().detach().numpy())
                 for interval_probs in probs_by_interval]
+        surv = pd.DataFrame(output.detach().cpu().numpy()).T
+        durations = torch.flatten(test_time).detach().cpu().numpy()
+        events = torch.flatten(test_event).detach().cpu().numpy()
+        ev = EvalSurv(surv, durations, events, censor_surv='km')
+        train_ctd = ev.concordance_td('antolini')
         recon_error = mse_loss(decoder_,X1).item()
         latent_error = latent_loss(model.z_mean, model.z_sigma).item()
         surv_error = surv_loss.forward(output, time_batch, event_batch, model.output_intervals.double().to(device)).item()
@@ -187,7 +192,7 @@ def test_loop(dataloader, model):
             Latent: {latent_error:>7f},\
             Surv: {surv_error:>7f},\
             Total: {tot_error:>7f},\
-            Cindex : {np.mean(c_index):>7f}")
+            Ctd : {train_ctd}")
         
 # Visualize loss     
 def visualize_loss(t_loss, v_loss):
@@ -207,7 +212,7 @@ def visualize_loss(t_loss, v_loss):
     plt.legend()
     plt.tight_layout()
     plt.show()
-    fig.savefig('1000_DNAm_loss_plot.png', bbox_inches = 'tight')
+    fig.savefig('400_mRNA_loss_plot.png', bbox_inches = 'tight')
     
 # Visualize c-index     
 def visualize_cindex(t_acc, v_acc):
@@ -223,14 +228,8 @@ def visualize_cindex(t_acc, v_acc):
     plt.legend()
     plt.tight_layout()
     plt.show()
-    fig.savefig('1000_DNAm_c-index_plot.png', bbox_inches = 'tight')
-    
+    fig.savefig('400_mRNA_c-index_plot.png', bbox_inches = 'tight')
 
-# t_loss_array = []
-# v_loss_array = []
-# for i in range(50):
-#     model, train_loss, valid_loss = train_model(model, patience, n_epochs, optimizer)
-    
 model, train_loss, valid_loss, train_acc, valid_acc = train_model(model, patience, n_epochs, optimizer) 
 visualize_loss(train_loss, valid_loss)
 visualize_cindex(train_acc, valid_acc)
