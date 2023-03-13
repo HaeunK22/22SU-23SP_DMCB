@@ -1,4 +1,4 @@
-"""Data loader"""
+"""Data loader for single dataset"""
 import torch
 from torch.utils.data import Dataset
 import warnings
