@@ -30,7 +30,8 @@ if cuda:
 
 input_dim = config.feat_num
 
-stdscaler = StandardScaler()
+# stdscaler = StandardScaler()
+stdscaler = MinMaxScaler()
 
 X1 = pd.read_table(config.input1, nrows = input_dim, header=None).transpose()
 X2 = pd.read_table(config.input2, nrows = config.feat_num).transpose()
@@ -75,9 +76,9 @@ model = MLSurv(encoder1, decoder1, encoder2, decoder2)
 model = model.to(device)
 
 learning_rate = 1e-6
-n_epochs = 1500
+n_epochs = 30
 batch_size = 256
-patience = 1500
+patience = 30
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 mse_loss = nn.MSELoss()
@@ -98,12 +99,27 @@ def train_model(model, patience, n_epochs, optimizer):
     # Track average c-index for validation data
     avg_valid_acc = []
     
+    ### Delete if not needed ###
     t_vae_losses = []
     t_disentangle_losses = []
+    t_loss_inher = []
+    t_loss_var = []
     t_surv_losses = []
     v_vae_losses = []
     v_disentangle_losses = []
+    v_loss_inher = []
+    v_loss_var = []
     v_surv_losses = []
+    avg_t_vae_losses = []
+    avg_t_disentangle_losses = []
+    avg_t_loss_inher = []
+    avg_t_loss_var = []
+    avg_t_surv_losses = []
+    avg_v_vae_losses = []
+    avg_v_disentangle_losses = []
+    avg_v_loss_inher = []
+    avg_v_loss_var = []
+    avg_v_surv_losses = []
     
     
     # early_stopping object
@@ -125,7 +141,7 @@ def train_model(model, patience, n_epochs, optimizer):
             # Survival Prediction Loss
             surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
             # Total loss
-            loss = 2*vae_loss + \
+            loss = vae_loss + \
                 disentangle_loss + \
                 200*surv_error
                 
@@ -136,8 +152,11 @@ def train_model(model, patience, n_epochs, optimizer):
         
             # Check train performance
             train_losses.append(loss.item())
+            ### Delete if not needed ###
             t_vae_losses.append(vae_loss.item())
             t_disentangle_losses.append(disentangle_loss.item())
+            t_loss_inher.append(loss_inher.item())
+            t_loss_var.append(loss_var.item())
             t_surv_losses.append(surv_error.item())
             
             
@@ -161,13 +180,16 @@ def train_model(model, patience, n_epochs, optimizer):
             # Survival Prediction Loss
             surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
             # Total Loss
-            loss = 2*vae_loss + \
+            loss = vae_loss + \
                 disentangle_loss + \
                 200*surv_error
             valid_losses.append(loss.item())
+            ### Delete if not needed ###
             v_vae_losses.append(vae_loss.item())
             v_disentangle_losses.append(disentangle_loss.item())
             v_surv_losses.append(surv_error.item())
+            v_loss_inher.append(loss_inher.item())
+            v_loss_var.append(loss_var.item())
         surv = pd.DataFrame(output.detach().cpu().numpy()).T
         durations = torch.flatten(val_time).detach().cpu().numpy()
         events = torch.flatten(val_event).detach().cpu().numpy()
@@ -181,12 +203,27 @@ def train_model(model, patience, n_epochs, optimizer):
         avg_train_acc.append(train_ctd)
         avg_valid_acc.append(valid_ctd)
         
+        ### Delete if not needed ###
         t_vae_loss = np.average(t_vae_losses)
         t_disentangle_loss = np.average(t_disentangle_losses)
+        t_loss_inhers = np.average(t_loss_inher)
+        t_loss_vars = np.average(t_loss_var)
         t_surv_loss = np.average(t_surv_losses)
         v_vae_loss = np.average(v_vae_losses)
         v_disentangle_loss = np.average(v_disentangle_losses)
+        v_loss_inhers = np.average(v_loss_inher)
+        v_loss_vars = np.average(v_loss_var)
         v_surv_loss = np.average(v_surv_losses)
+        avg_t_vae_losses.append(t_vae_loss)
+        avg_t_disentangle_losses.append(t_disentangle_losses)
+        avg_t_loss_inher.append(t_loss_inher)
+        avg_t_loss_var.append(t_loss_var)
+        avg_t_surv_losses.append(t_surv_losses)
+        avg_v_vae_losses.append(v_vae_losses)
+        avg_v_disentangle_losses.append(v_disentangle_losses)
+        avg_v_loss_inher.append(v_loss_inher)
+        avg_v_loss_var.append(v_loss_var)
+        avg_v_surv_losses.append(v_surv_losses)
 
         
         epoch_len = len(str(n_epochs))
@@ -198,25 +235,38 @@ def train_model(model, patience, n_epochs, optimizer):
         print_msg = (f'[{epoch:>{epoch_len}}/{n_epochs:>{epoch_len}}] \n' +
                 f'TRAIN\n' + 
                 f'vae : {t_vae_loss:.5f} | disentangle : {t_disentangle_loss:.5f} | surv : {t_surv_loss:.5f} | total loss : {train_loss:.5f}\n' +
+                f'inherent loss (needs to shrink) : {t_loss_inhers:.5f} | variational loss (needs to grow) : {t_loss_vars:.5f}\n' +
                 f'VALIDATION\n' +
-                f'vae : {v_vae_loss:.5f} | disentangle : {v_disentangle_loss:.5f} | surv : {v_surv_loss:.5f} | total loss : {valid_loss:.5f}')
+                f'vae : {v_vae_loss:.5f} | disentangle : {v_disentangle_loss:.5f} | surv : {v_surv_loss:.5f} | total loss : {valid_loss:.5f}\n' +
+                f'inherent loss (needs to shrink) : {v_loss_inhers:.5f} | variational loss (needs to grow) : {v_loss_vars:.5f}')
         print(print_msg)
 
         # clear lists to track next epoch
         train_losses = []
         valid_losses = []
+        ### Delete if not needed ###
+        t_vae_losses = []
+        t_disentangle_losses = []
+        t_loss_inher = []
+        t_loss_var = []
+        t_surv_losses = []
+        v_vae_losses = []
+        v_disentangle_losses = []
+        v_loss_inher = []
+        v_loss_var = []
+        v_surv_losses = []
 
         # make check point when validation loss decreases
-        # early_stopping(valid_loss, model)
+        early_stopping(valid_loss, model)
 
         if early_stopping.early_stop:
             print("Early stopping")
             break
 
    # best model이 저장되어있는 last checkpoint를 로드한다.
-    model.load_state_dict(torch.load('checkpoint1.pt'))
+    model.load_state_dict(torch.load('checkpoint.pt'))
     
-    return  model, avg_train_losses, avg_valid_losses, avg_train_acc, avg_valid_acc
+    return  model, avg_train_losses, avg_valid_losses, avg_train_acc, avg_valid_acc, avg_t_loss_inher, avg_t_loss_var
     
 # iterate over test dataset to check model performance
 def test_loop(dataloader, model):
@@ -241,7 +291,7 @@ def test_loop(dataloader, model):
         # Survival Prediction Loss
         surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
         # Total Loss
-        loss = 2*vae_loss + \
+        loss = vae_loss + \
             disentangle_loss + \
             200*surv_error
         print(f"Test Accuracy : ")
@@ -251,7 +301,7 @@ def test_loop(dataloader, model):
             Total loss: {loss:>7f},\
             Ctd : {test_ctd}")
         
-# Visualize loss     
+# Visualize loss
 def visualize_loss(t_loss, v_loss):
     fig = plt.figure(figsize=(10,8))
     plt.plot(range(1,len(t_loss)+1), t_loss, label='Training Loss')
@@ -263,13 +313,29 @@ def visualize_loss(t_loss, v_loss):
 
     plt.xlabel('epochs')
     plt.ylabel('loss')
-    plt.ylim(-100, 100)
+    plt.ylim(0, 20)
     plt.xlim(0, len(t_loss)+1)
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
     plt.show()
-    fig.savefig('MLSurv_loss_plot1.png', bbox_inches = 'tight')
+    fig.savefig('MLSurv_loss_plot.png', bbox_inches = 'tight')
+    
+# Visualize Inherent Loss and Variational Loss for training
+def visualize_disentangle(in_loss, va_loss):
+    fig = plt.figure(figsize=(10,8))
+    plt.plot(range(1,len(in_loss)+1), in_loss, label='Inherent Loss')
+    plt.plot(range(1,len(va_loss)+1), va_loss, label='Variational Loss')
+
+    plt.xlabel('epochs')
+    plt.ylabel('loss')
+    plt.ylim(0, 20)
+    plt.xlim(0, len(in_loss)+1)
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    fig.savefig('MLSurv_disentangleLoss_plot.png', bbox_inches = 'tight')
     
 # Visualize c-td     
 def visualize_cindex(t_acc, v_acc):
@@ -285,10 +351,11 @@ def visualize_cindex(t_acc, v_acc):
     plt.legend()
     plt.tight_layout()
     plt.show()
-    fig.savefig('MLSurv_c-td_plot1.png', bbox_inches = 'tight')
+    fig.savefig('MLSurv_c-td_plot.png', bbox_inches = 'tight')
     
 
-model, train_loss, valid_loss, train_acc, valid_acc = train_model(model, patience, n_epochs, optimizer) 
+model, train_loss, valid_loss, train_acc, valid_acc, in_loss, va_loss = train_model(model, patience, n_epochs, optimizer) 
 visualize_loss(train_loss, valid_loss)
+visualize_disentangle(in_loss, va_loss)
 visualize_cindex(train_acc, valid_acc)
 test_loop(test_dataloader, model)
