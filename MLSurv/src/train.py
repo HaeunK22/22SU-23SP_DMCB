@@ -75,10 +75,10 @@ decoder2 = Decoder(64, 256, input_dim)
 model = MLSurv(encoder1, decoder1, encoder2, decoder2)
 model = model.to(device)
 
-learning_rate = 1e-6
-n_epochs = 30
+learning_rate = 5e-5
+n_epochs = 3000
 batch_size = 256
-patience = 30
+patience = 3000
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 mse_loss = nn.MSELoss()
@@ -137,11 +137,12 @@ def train_model(model, patience, n_epochs, optimizer):
             # Disentangle Loss
             loss_inher = mse_loss(comm1, comm2)
             loss_var = mse_loss(spe1, spe2)
-            disentangle_loss = loss_inher - loss_var
+            # disentangle_loss = loss_inher - loss_var
+            disentangle_loss = loss_inher/(max(loss_var, 1e-07))
             # Survival Prediction Loss
             surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
             # Total loss
-            loss = vae_loss + \
+            loss = 2*vae_loss + \
                 disentangle_loss + \
                 200*surv_error
                 
@@ -176,11 +177,12 @@ def train_model(model, patience, n_epochs, optimizer):
             # Disentangle Loss
             loss_inher = mse_loss(comm1, comm2)
             loss_var = mse_loss(spe1, spe2)
-            disentangle_loss = loss_inher - loss_var
+            # disentangle_loss = loss_inher - loss_var
+            disentangle_loss = loss_inher/(max(loss_var, 1e-07))
             # Survival Prediction Loss
             surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
             # Total Loss
-            loss = vae_loss + \
+            loss = 2*vae_loss + \
                 disentangle_loss + \
                 200*surv_error
             valid_losses.append(loss.item())
@@ -264,7 +266,7 @@ def train_model(model, patience, n_epochs, optimizer):
             break
 
    # best model이 저장되어있는 last checkpoint를 로드한다.
-    model.load_state_dict(torch.load('checkpoint.pt'))
+    model.load_state_dict(torch.load('checkpointdiv.pt'))
     
     return  model, avg_train_losses, avg_valid_losses, avg_train_acc, avg_valid_acc, avg_t_loss_inher, avg_t_loss_var
     
@@ -287,11 +289,12 @@ def test_loop(dataloader, model):
         # Disentangle Loss
         loss_inher = mse_loss(comm1, comm2)
         loss_var = mse_loss(spe1, spe2)
-        disentangle_loss = loss_inher - loss_var
+        # disentangle_loss = loss_inher - loss_var
+        disentangle_loss = loss_inher / (max(loss_var, 1e-07))
         # Survival Prediction Loss
         surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
         # Total Loss
-        loss = vae_loss + \
+        loss = 2*vae_loss + \
             disentangle_loss + \
             200*surv_error
         print(f"Test Accuracy : ")
@@ -313,13 +316,13 @@ def visualize_loss(t_loss, v_loss):
 
     plt.xlabel('epochs')
     plt.ylabel('loss')
-    plt.ylim(0, 20)
+    plt.ylim(-25, 25)
     plt.xlim(0, len(t_loss)+1)
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
     plt.show()
-    fig.savefig('MLSurv_loss_plot.png', bbox_inches = 'tight')
+    fig.savefig('MLSurvdiv_loss_plot.png', bbox_inches = 'tight')
     
 # Visualize Inherent Loss and Variational Loss for training
 def visualize_disentangle(in_loss, va_loss):
@@ -335,7 +338,7 @@ def visualize_disentangle(in_loss, va_loss):
     plt.legend()
     plt.tight_layout()
     plt.show()
-    fig.savefig('MLSurv_disentangleLoss_plot.png', bbox_inches = 'tight')
+    fig.savefig('MLSurvdiv_disentangleLoss_plot.png', bbox_inches = 'tight')
     
 # Visualize c-td     
 def visualize_cindex(t_acc, v_acc):
@@ -351,7 +354,7 @@ def visualize_cindex(t_acc, v_acc):
     plt.legend()
     plt.tight_layout()
     plt.show()
-    fig.savefig('MLSurv_c-td_plot.png', bbox_inches = 'tight')
+    fig.savefig('MLSurvdiv_c-td_plot.png', bbox_inches = 'tight')
     
 
 model, train_loss, valid_loss, train_acc, valid_acc, in_loss, va_loss = train_model(model, patience, n_epochs, optimizer) 
