@@ -41,19 +41,12 @@ patience = config.patience
 alpha, beta, gamma = [float(c) for c in coefficients.split(',')]
 dim1, dim2 = [int(c) for c in hiddendim.split(',')]
 
-path = "./../figures/" + 'hid' + hiddendim + 'pat' + str(patience)
+path = "./../figures/" + 'hid' + hiddendim + 'pat' + str(patience) + 'c4:s6'
 if not os.path.exists(path):
     os.mkdir(path)
         
 # stdscaler = StandardScaler()
 stdscaler = MinMaxScaler()
-
-encoder1 = Encoder(input_dim, dim1)
-decoder1 = Decoder(dim2, dim1, input_dim)
-encoder2 = Encoder(input_dim, dim1)
-decoder2 = Decoder(dim2, dim1, input_dim)
-# model = MLSurv(encoder1, decoder1, encoder2, decoder2, dim1, dim2)
-# model = model.to(device)
 
 learning_rate = 5e-5
 n_epochs = 3000
@@ -259,7 +252,60 @@ def test_loop(dataloader, model):
             Total loss: {loss:>7f},\
             Ctd : {test_ctd}")
     
-    return test_ctd      
+    return test_ctd
+        
+# # Visualize loss
+# def visualize_loss(t_loss, v_loss, path):
+#     fig = plt.figure(figsize=(10,8))
+#     plt.plot(range(1,len(t_loss)+1), t_loss, label='Training Loss')
+#     plt.plot(range(1,len(v_loss)+1), v_loss, label='Validation Loss')
+
+#     # validation loss의 최저값 지점을 찾기
+#     minposs = v_loss.index(min(v_loss))+1
+#     plt.axvline(minposs, linestyle='--', color='r', label='Early Stopping Checkpoint')
+
+#     plt.xlabel('epochs')
+#     plt.ylabel('loss')
+#     # plt.ylim(-25, 25)
+#     plt.xlim(0, len(t_loss)+1)
+#     plt.grid(True)
+#     plt.legend()
+#     plt.tight_layout()
+#     # plt.show()
+#     fig.savefig(path + '/MLSurvinher_loss_plot.png', bbox_inches = 'tight')
+    
+# # Visualize vae loss, disentangle loss, survival prediction loss
+# def visualize_3train_loss(va_loss, dis_loss, sv_loss, path):
+#     fig = plt.figure(figsize=(10,8))
+#     plt.plot(range(1,len(va_loss)+1), va_loss, label='VAE Loss')
+#     plt.plot(range(1,len(dis_loss)+1), dis_loss, label='Disentangle Loss')
+#     plt.plot(range(1,len(sv_loss)+1), sv_loss, label='Survival Loss')
+
+#     plt.xlabel('epochs')
+#     plt.ylabel('loss')
+#     plt.xlim(0, len(va_loss)+1)
+#     plt.grid(True)
+#     plt.legend()
+#     plt.tight_layout()
+#     # plt.show()
+#     fig.savefig(path + '/MLSurvinher_3trainloss_plot.png', bbox_inches = 'tight')
+    
+# # Visualize c-td     
+# def visualize_cindex(t_acc, v_acc, path):
+#     fig = plt.figure(figsize=(10,8))
+#     plt.plot(range(1,len(t_acc)+1), t_acc, label='Training C-td')
+#     plt.plot(range(1,len(v_acc)+1), v_acc, label='Validation C-td')
+
+#     plt.xlabel('epochs')
+#     plt.ylabel('c-td')
+#     plt.ylim(0.4, 1.0)
+#     plt.xlim(0, len(t_acc)+1)
+#     plt.grid(True)
+#     plt.legend()
+#     plt.tight_layout()
+#     plt.title('test c-td:'+ str(test_acc))
+#     plt.show()
+#     fig.savefig(path+'/MLSurvinher_c-td_plot.png', bbox_inches = 'tight')
 
 # Plot validation set's c-td for each fold.
 def plot_fold_acc(valid_acc, test_acc, path):
@@ -291,36 +337,32 @@ for i, (train_index, val_index) in enumerate(kf.split(train_idx)):
     train_dataloader = DataLoader(training_data, batch_size = train_index.size)
     val_dataloader = DataLoader(val_data, batch_size = val_index.size)
     
-    model = MLSurv(encoder1, decoder1, encoder2, decoder2, dim1, dim2)
+    model = MLSurv(input_dim, dim1, dim2)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     model, train_loss, valid_loss, train_acc, valid_acc, va_loss, dis_loss, sv_loss = train_model(model, patience, n_epochs, optimizer)
     val_acc.append(valid_acc) 
 
-# print(f'Validation set c-td : {val_acc}')
-# print(f'Average validation c-td : {mean(val_acc)}')
 print(f'--------------Train--------------------')
 train_idx, val_idx, _, _ = train_test_split(train_idx, event[train_idx], test_size = 0.25, random_state = 1)
-model = MLSurv(encoder1, decoder1, encoder2, decoder2, dim1, dim2)
-model = model.to(device)
-train_X1 = X1[train_index, :]
-val_X1 = X1[val_index, :]
-train_X2 = X2[train_index, :]
-val_X2 = X2[val_index, :]
-train_time = time[train_index]
-val_time = time[val_index]
-train_event = time[train_index]
-val_event = time[val_index]
+train_X1 = X1[train_idx, :]
+val_X1 = X1[val_idx, :]
+train_X2 = X2[train_idx, :]
+val_X2 = X2[val_idx, :]
+train_time = time[train_idx]
+val_time = time[val_idx]
+train_event = time[train_idx]
+val_event = time[val_idx]
     
 training_data = Data(train_X1, train_X2, train_time, train_event, device)
 val_data = Data(val_X1, val_X2, val_time, val_event, device)
 test_data = Data(test_X1, test_X2, test_time, test_event, device)
     
-train_dataloader = DataLoader(training_data, batch_size = train_index.size)
-val_dataloader = DataLoader(val_data, batch_size = val_index.size)
+train_dataloader = DataLoader(training_data, batch_size = train_idx.size)
+val_dataloader = DataLoader(val_data, batch_size = val_idx.size)
 test_dataloader = DataLoader(test_data, batch_size = test_idx.size)
 
-model = MLSurv(encoder1, decoder1, encoder2, decoder2, dim1, dim2)
+model = MLSurv(input_dim, dim1, dim2)
 model = model.to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 model, train_loss, valid_loss, train_acc, valid_acc, va_loss, dis_loss, sv_loss = train_model(model, patience, n_epochs, optimizer)
