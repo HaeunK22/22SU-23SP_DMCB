@@ -1,4 +1,4 @@
-def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, optimizer):
+def train_model(model, patience, n_epochs, optimizer):
     
     # Track training loss
     train_losses = []
@@ -27,8 +27,9 @@ def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, opt
     avg_v_disentangle_losses = []
     avg_v_surv_losses = []
     
+    
     # early_stopping object
-    early_stopping = EarlyStopping(patience = patience, verbose = True, path = path + '/checkpointinher2.pt')
+    early_stopping = EarlyStopping(patience = patience, verbose = True, path = path + '/checkpointinher.pt')
     
     for epoch in range(1, n_epochs + 1):
         model.train()
@@ -44,9 +45,9 @@ def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, opt
             # Survival Prediction Loss
             surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
             # Total loss
-            loss = alpha*vae_loss + \
-                beta*disentangle_loss + \
-                gamma*surv_error
+            loss = 2*vae_loss + \
+                disentangle_loss + \
+                200*surv_error
                 
             # Backpropagation
             optimizer.zero_grad()
@@ -79,14 +80,15 @@ def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, opt
             # Survival Prediction Loss
             surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
             # Total Loss
-            loss = alpha*vae_loss + \
-                beta*disentangle_loss + \
-                gamma*surv_error
+            loss = 2*vae_loss + \
+                1*disentangle_loss + \
+                200*surv_error
             valid_losses.append(loss.item())
             ### Delete if not needed ###
             v_vae_losses.append(vae_loss.item())
             v_disentangle_losses.append(disentangle_loss.item())
             v_surv_losses.append(surv_error.item())
+
         surv = pd.DataFrame(output.detach().cpu().numpy()).T
         durations = torch.flatten(val_time).detach().cpu().numpy()
         events = torch.flatten(val_event).detach().cpu().numpy()
@@ -116,6 +118,11 @@ def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, opt
 
         
         epoch_len = len(str(n_epochs))
+        # print_msg = (f'[{epoch:>{epoch_len}}/{n_epochs:>{epoch_len}}] ' +
+        #              f'train_loss: {train_loss:.5f} ' +
+        #              f'valid_loss: {valid_loss:.5f}')
+        # print(print_msg)
+        #if (epoch % 100 == 0):
         print_msg = (f'[{epoch:>{epoch_len}}/{n_epochs:>{epoch_len}}] \n' +
                 f'TRAIN\n' + 
                 f'vae : {t_vae_loss:.5f} | disentangle : {t_disentangle_loss:.5f} | surv : {t_surv_loss:.5f} | total loss : {train_loss:.5f}\n' +
@@ -142,10 +149,12 @@ def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, opt
             break
 
    # best model이 저장되어있는 last checkpoint를 로드한다.
-    model.load_state_dict(torch.load(path + '/checkpointinher2.pt'))
+    model.load_state_dict(torch.load(path + '/checkpointinher.pt'))
+    # print(f'avg_t_vae_losses : {avg_t_vae_losses}')
+    # print(f'avg_t_disentangle_losses : {avg_t_disentangle_losses}')
+    # print(f'avg_t_surv_losses : {avg_t_surv_losses}')
+    return  model, avg_train_losses, avg_valid_losses, avg_train_acc, avg_valid_acc, avg_t_vae_losses, avg_t_disentangle_losses, avg_t_surv_losses
     
-    return  model, avg_train_losses, avg_valid_losses, avg_train_acc, avg_valid_acc, valid_ctd, avg_t_vae_losses, avg_t_disentangle_losses, avg_t_surv_losses
-
 # iterate over test dataset to check model performance
 def test_loop(dataloader, model):
     print("---------------- Start test -------------------")
@@ -164,17 +173,17 @@ def test_loop(dataloader, model):
                 latent_loss(mu1, sigma1) + latent_loss(mu2, sigma2)
         # Disentangle Loss
         disentangle_loss = mse_loss(comm1, comm2)
+
         # Survival Prediction Loss
         surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
         # Total Loss
-        loss = alpha*vae_loss + \
-            beta*disentangle_loss + \
-            gamma*surv_error
+        loss = 2*vae_loss + \
+            disentangle_loss + \
+            200*surv_error
         print(f"Test Accuracy : ")
         print(f"VAE loss: {vae_loss:>7f},\
             Disentangle loss: {disentangle_loss:>7f},\
             Surv loss: {surv_error:>7f},\
             Total loss: {loss:>7f},\
             Ctd : {test_ctd}")
-    
     return test_ctd
