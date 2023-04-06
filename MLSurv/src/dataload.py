@@ -16,7 +16,7 @@ class Data(Dataset):
     
     def __getitem__(self, index):
         x1 = torch.tensor(self.x1_data[index]).clone().detach() # mRNA
-        x2 = torch.tensor(self.x1_data[index]).clone().detach() # Methylataion
+        x2 = torch.tensor(self.x2_data[index]).clone().detach() # Methylataion
         time = torch.tensor(self.time_data[index]).clone().detach()
         observed = torch.tensor(self.observed_data[index]).clone().detach()
         return x1, x2, time, observed
