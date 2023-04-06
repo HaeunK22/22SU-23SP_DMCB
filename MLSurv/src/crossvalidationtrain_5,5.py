@@ -68,11 +68,6 @@ time, event = torch.tensor(label['time'], dtype=torch.float), torch.tensor(label
 time, event = time.unsqueeze(1).to(device), event.unsqueeze(1).to(device)
 train_idx, test_idx, _, _ = train_test_split(np.arange(X1.shape[0]), event, test_size = 0.2, random_state = 1)
 
-test_X1 = X1[test_idx, :]
-test_X2 = X2[test_idx, :]
-test_time = time[test_idx]
-test_event = event[test_idx]
-
 def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, optimizer):
     
     # Track training loss
@@ -230,8 +225,8 @@ def test_loop(dataloader, model):
             decoder1_, decoder2_, decoder3_, decoder4_, comm1, spe1, comm2, spe2, mu1, sigma1, mu2, sigma2, output, inputmlp = model.forward(X1, X2)
     
         surv = pd.DataFrame(output.detach().cpu().numpy()).T
-        durations = torch.flatten(test_time).detach().cpu().numpy()
-        events = torch.flatten(test_event).detach().cpu().numpy()
+        durations = torch.flatten(val_time).detach().cpu().numpy()
+        events = torch.flatten(val_event).detach().cpu().numpy()
         ev = EvalSurv(surv, durations, events, censor_surv='km')
         test_ctd = ev.concordance_td('antolini')
         # VAE Loss
