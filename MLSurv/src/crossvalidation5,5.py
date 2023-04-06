@@ -1,9 +1,9 @@
-"""training with RNA and Methylation."""
+"""training with RNA and Methylation. Common : variant = 5 : 5."""
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold
-from MLSurvfinddim import *
+from MLSurv import *
 from loss import SurvLoss, latent_loss
 from dataload import Data
 from earlystopping import EarlyStopping
@@ -19,7 +19,8 @@ from statistics import mean
 import os
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--input1', '-i1', type=str, default='./../data/RNA_common_sorted.tsv')
+# parser.add_argument('--input1', '-i1', type=str, default='./../data/RNA_common_sorted.tsv')
+parser.add_argument('--input1', '-i1', type=str, default='./../data/RNA_common_sort_protein.tsv')
 parser.add_argument('--input2', '-i2', type=str, default='./../data/methyl_common_sort.tsv')
 parser.add_argument('--label', '-l', type=str, default='./../data/labels_common.tsv')
 parser.add_argument('--feat_num', '-f', type=int, default=1000)
@@ -41,17 +42,16 @@ patience = config.patience
 alpha, beta, gamma = [float(c) for c in coefficients.split(',')]
 dim1, dim2 = [int(c) for c in hiddendim.split(',')]
 
-path = "./../figures/" + 'hid' + hiddendim + 'pat' + str(patience) + 'c4:s6'
+path = "./../figures/" + 'hid' + hiddendim + 'pat' + str(patience) + 'c5:s5_proteincoding'
 if not os.path.exists(path):
     os.mkdir(path)
         
 # stdscaler = StandardScaler()
 stdscaler = MinMaxScaler()
 
-learning_rate = 5e-5
+learning_rate = 1e-4
 n_epochs = 3000
 
-# optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 mse_loss = nn.MSELoss()
 surv_loss = SurvLoss(device)
 
@@ -66,14 +66,14 @@ X2 = torch.tensor(np.array(X2), dtype = torch.float).to(device)
 label = pd.read_table(config.label)
 time, event = torch.tensor(label['time'], dtype=torch.float), torch.tensor(label['event'], dtype=torch.float)
 time, event = time.unsqueeze(1).to(device), event.unsqueeze(1).to(device)
-train_idx, test_idx, _, _ = train_test_split(np.arange(X1.shape[0]), event, test_size = 0.2, random_state = 25)
+train_idx, test_idx, _, _ = train_test_split(np.arange(X1.shape[0]), event, test_size = 0.2, random_state = 1)
 
 test_X1 = X1[test_idx, :]
 test_X2 = X2[test_idx, :]
 test_time = time[test_idx]
 test_event = event[test_idx]
 
-def train_model(model, patience, n_epochs, optimizer):
+def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, optimizer):
     
     # Track training loss
     train_losses = []
@@ -103,7 +103,7 @@ def train_model(model, patience, n_epochs, optimizer):
     avg_v_surv_losses = []
     
     # early_stopping object
-    early_stopping = EarlyStopping(patience = patience, verbose = True, path = path + '/checkpointinher.pt')
+    early_stopping = EarlyStopping(patience = patience, verbose = True, path = path + '/checkpointinher1.pt')
     
     for epoch in range(1, n_epochs + 1):
         model.train()
@@ -135,7 +135,8 @@ def train_model(model, patience, n_epochs, optimizer):
             t_disentangle_losses.append(disentangle_loss.item())
             t_surv_losses.append(surv_error.item())
             
-            
+        model.eval()
+        _, _, _, _, _, _, _, _, _, _, _, _, output, _ = model.forward(train_X1, train_X2)    
         surv = pd.DataFrame(output.detach().cpu().numpy()).T
         durations = torch.flatten(train_time).detach().cpu().numpy()
         events = torch.flatten(train_event).detach().cpu().numpy()
@@ -193,9 +194,9 @@ def train_model(model, patience, n_epochs, optimizer):
         epoch_len = len(str(n_epochs))
         print_msg = (f'[{epoch:>{epoch_len}}/{n_epochs:>{epoch_len}}] \n' +
                 f'TRAIN\n' + 
-                f'vae : {t_vae_loss:.5f} | disentangle : {t_disentangle_loss:.5f} | surv : {t_surv_loss:.5f} | total loss : {train_loss:.5f}\n' +
+                f'vae : {t_vae_loss:.5f} | disentangle : {t_disentangle_loss:.5f} | surv : {t_surv_loss:.5f} | total loss : {train_loss:.5f}| train Ctd : {train_ctd:.5f}\n' +
                 f'VALIDATION\n' +
-                f'vae : {v_vae_loss:.5f} | disentangle : {v_disentangle_loss:.5f} | surv : {v_surv_loss:.5f} | total loss : {valid_loss:.5f}')
+                f'vae : {v_vae_loss:.5f} | disentangle : {v_disentangle_loss:.5f} | surv : {v_surv_loss:.5f} | total loss : {valid_loss:.5f}| val Ctd : {valid_ctd:.5f}')
         print(print_msg)
 
         # clear lists to track next epoch
@@ -217,11 +218,10 @@ def train_model(model, patience, n_epochs, optimizer):
             break
 
    # best model이 저장되어있는 last checkpoint를 로드한다.
-    model.load_state_dict(torch.load(path + '/checkpointinher.pt'))
+    model.load_state_dict(torch.load(path + '/checkpointinher1.pt'))
     
-    return  model, avg_train_losses, avg_valid_losses, avg_train_acc, valid_ctd, avg_t_vae_losses, avg_t_disentangle_losses, avg_t_surv_losses
+    return  model, avg_train_losses, avg_valid_losses, avg_train_acc, avg_valid_acc, avg_t_vae_losses, avg_t_disentangle_losses, avg_t_surv_losses
 
-# iterate over test dataset to check model performance
 def test_loop(dataloader, model):
     print("---------------- Start test -------------------")
     model.eval()
@@ -239,86 +239,33 @@ def test_loop(dataloader, model):
                 latent_loss(mu1, sigma1) + latent_loss(mu2, sigma2)
         # Disentangle Loss
         disentangle_loss = mse_loss(comm1, comm2)
+
         # Survival Prediction Loss
         surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
         # Total Loss
-        loss = alpha*vae_loss + \
-            beta*disentangle_loss + \
-            gamma*surv_error
+        loss = 2*vae_loss + \
+            disentangle_loss + \
+            200*surv_error
         print(f"Test Accuracy : ")
         print(f"VAE loss: {vae_loss:>7f},\
             Disentangle loss: {disentangle_loss:>7f},\
             Surv loss: {surv_error:>7f},\
             Total loss: {loss:>7f},\
             Ctd : {test_ctd}")
-    
     return test_ctd
-        
-# # Visualize loss
-# def visualize_loss(t_loss, v_loss, path):
-#     fig = plt.figure(figsize=(10,8))
-#     plt.plot(range(1,len(t_loss)+1), t_loss, label='Training Loss')
-#     plt.plot(range(1,len(v_loss)+1), v_loss, label='Validation Loss')
-
-#     # validation loss의 최저값 지점을 찾기
-#     minposs = v_loss.index(min(v_loss))+1
-#     plt.axvline(minposs, linestyle='--', color='r', label='Early Stopping Checkpoint')
-
-#     plt.xlabel('epochs')
-#     plt.ylabel('loss')
-#     # plt.ylim(-25, 25)
-#     plt.xlim(0, len(t_loss)+1)
-#     plt.grid(True)
-#     plt.legend()
-#     plt.tight_layout()
-#     # plt.show()
-#     fig.savefig(path + '/MLSurvinher_loss_plot.png', bbox_inches = 'tight')
-    
-# # Visualize vae loss, disentangle loss, survival prediction loss
-# def visualize_3train_loss(va_loss, dis_loss, sv_loss, path):
-#     fig = plt.figure(figsize=(10,8))
-#     plt.plot(range(1,len(va_loss)+1), va_loss, label='VAE Loss')
-#     plt.plot(range(1,len(dis_loss)+1), dis_loss, label='Disentangle Loss')
-#     plt.plot(range(1,len(sv_loss)+1), sv_loss, label='Survival Loss')
-
-#     plt.xlabel('epochs')
-#     plt.ylabel('loss')
-#     plt.xlim(0, len(va_loss)+1)
-#     plt.grid(True)
-#     plt.legend()
-#     plt.tight_layout()
-#     # plt.show()
-#     fig.savefig(path + '/MLSurvinher_3trainloss_plot.png', bbox_inches = 'tight')
-    
-# # Visualize c-td     
-# def visualize_cindex(t_acc, v_acc, path):
-#     fig = plt.figure(figsize=(10,8))
-#     plt.plot(range(1,len(t_acc)+1), t_acc, label='Training C-td')
-#     plt.plot(range(1,len(v_acc)+1), v_acc, label='Validation C-td')
-
-#     plt.xlabel('epochs')
-#     plt.ylabel('c-td')
-#     plt.ylim(0.4, 1.0)
-#     plt.xlim(0, len(t_acc)+1)
-#     plt.grid(True)
-#     plt.legend()
-#     plt.tight_layout()
-#     plt.title('test c-td:'+ str(test_acc))
-#     plt.show()
-#     fig.savefig(path+'/MLSurvinher_c-td_plot.png', bbox_inches = 'tight')
 
 # Plot validation set's c-td for each fold.
-def plot_fold_acc(valid_acc, test_acc, path):
+def plot_fold_acc(valid_acc, path):
     names = ['fold1', 'fold2', 'fold3', 'fold4', 'fold5']
     fig = plt.figure(figsize=(10,8))
     
     
     plt.bar(names, valid_acc)
-    plt.title('average c-td : ' + str(mean(valid_acc)) + ', test c-td : ' + str(test_acc))
-    fig.savefig(path + '/MLSurvinher_valctd_plot.png', bbox_inches = 'tight')
+    plt.title('average c-td : ' + str(mean(valid_acc)))
+    fig.savefig(path + '/kfold_ctd_plot1.png', bbox_inches = 'tight')
     
 
-kf = KFold(n_splits= 5)
+kf = KFold(n_splits = 4)
 val_acc = []
 for i, (train_index, val_index) in enumerate(kf.split(train_idx)):
     print(f'--------------Fold {i}---------------')
@@ -334,37 +281,15 @@ for i, (train_index, val_index) in enumerate(kf.split(train_idx)):
     training_data = Data(train_X1, train_X2, train_time, train_event, device)
     val_data = Data(val_X1, val_X2, val_time, val_event, device)
     
-    train_dataloader = DataLoader(training_data, batch_size = train_index.size)
+    train_dataloader = DataLoader(training_data, batch_size = 512)
     val_dataloader = DataLoader(val_data, batch_size = val_index.size)
     
     model = MLSurv(input_dim, dim1, dim2)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    model, train_loss, valid_loss, train_acc, valid_acc, va_loss, dis_loss, sv_loss = train_model(model, patience, n_epochs, optimizer)
+    model, train_loss, valid_loss, train_acc, avg_val_acc, va_loss, dis_loss, sv_loss = train_model(model, train_dataloader, val_dataloader, patience, n_epochs, optimizer)
+    
+    valid_acc = test_loop(val_dataloader, model)
     val_acc.append(valid_acc) 
 
-print(f'--------------Train--------------------')
-train_idx, val_idx, _, _ = train_test_split(train_idx, event[train_idx], test_size = 0.25, random_state = 1)
-train_X1 = X1[train_idx, :]
-val_X1 = X1[val_idx, :]
-train_X2 = X2[train_idx, :]
-val_X2 = X2[val_idx, :]
-train_time = time[train_idx]
-val_time = time[val_idx]
-train_event = time[train_idx]
-val_event = time[val_idx]
-    
-training_data = Data(train_X1, train_X2, train_time, train_event, device)
-val_data = Data(val_X1, val_X2, val_time, val_event, device)
-test_data = Data(test_X1, test_X2, test_time, test_event, device)
-    
-train_dataloader = DataLoader(training_data, batch_size = train_idx.size)
-val_dataloader = DataLoader(val_data, batch_size = val_idx.size)
-test_dataloader = DataLoader(test_data, batch_size = test_idx.size)
-
-model = MLSurv(input_dim, dim1, dim2)
-model = model.to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-model, train_loss, valid_loss, train_acc, valid_acc, va_loss, dis_loss, sv_loss = train_model(model, patience, n_epochs, optimizer)
-test_acc = test_loop(test_dataloader, model)
-plot_fold_acc(val_acc, test_acc, path)
+plot_fold_acc(val_acc, path)
