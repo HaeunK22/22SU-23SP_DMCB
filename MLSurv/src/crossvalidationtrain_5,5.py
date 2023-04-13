@@ -26,7 +26,7 @@ parser.add_argument('--label', '-l', type=str, default='./../data/labels_common.
 parser.add_argument('--feat_num', '-f', type=int, default=1000)
 parser.add_argument('--coefficient', '-c', type=str, default='2,1,200')
 parser.add_argument('--hiddendim', '-d', type=str, default='500,200')
-parser.add_argument('--patience', '-p', type=int, default= '300')
+parser.add_argument('--patience', '-p', type=int, default= '100')
 parser.add_argument('--device', '-gpu', type=int, default=0)
 
 config = parser.parse_args()
@@ -42,7 +42,8 @@ patience = config.patience
 alpha, beta, gamma = [float(c) for c in coefficients.split(',')]
 dim1, dim2 = [int(c) for c in hiddendim.split(',')]
 
-path = "./../figures/" + 'hid' + hiddendim + 'pat' + str(patience) + 'c5:s5_proteincoding'
+path = "./../figures/" + 'input' + str(input_dim) + 'hid' + hiddendim + 'pat' + str(patience) + 'c5:s5_proteincoding'
+
 if not os.path.exists(path):
     os.mkdir(path)
         
@@ -98,7 +99,7 @@ def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, opt
     avg_v_surv_losses = []
     
     # early_stopping object
-    early_stopping = EarlyStopping(patience = patience, verbose = True, path = path + '/checkpointinher1.pt')
+    early_stopping = EarlyStopping(patience = patience, verbose = True, path = path + '/checkpointinher5.pt')
     
     for epoch in range(1, n_epochs + 1):
         model.train()
@@ -213,7 +214,7 @@ def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, opt
             break
 
    # best model이 저장되어있는 last checkpoint를 로드한다.
-    model.load_state_dict(torch.load(path + '/checkpointinher1.pt'))
+    model.load_state_dict(torch.load(path + '/checkpointinher5.pt'))
     
     return  model, avg_train_losses, avg_valid_losses, avg_train_acc, avg_valid_acc, avg_t_vae_losses, avg_t_disentangle_losses, avg_t_surv_losses
 
@@ -251,16 +252,16 @@ def test_loop(dataloader, model):
 
 # Plot validation set's c-td for each fold.
 def plot_fold_acc(valid_acc, path):
-    names = ['fold1', 'fold2', 'fold3', 'fold4', 'fold5']
+    names = ['fold1', 'fold2', 'fold3', 'fold4']
     fig = plt.figure(figsize=(10,8))
     
     
     plt.bar(names, valid_acc)
     plt.title('average c-td : ' + str(mean(valid_acc)))
-    fig.savefig(path + '/kfold_ctd_plot1.png', bbox_inches = 'tight')
+    fig.savefig(path + '/kfold_ctd_plot5.png', bbox_inches = 'tight')
     
 
-kf = KFold(n_splits = 4)
+kf = KFold(n_splits = 4, shuffle = True, random_state = 5)
 val_acc = []
 for i, (train_index, val_index) in enumerate(kf.split(train_idx)):
     print(f'--------------Fold {i}---------------')
