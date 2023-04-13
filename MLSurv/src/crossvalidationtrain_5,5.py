@@ -271,8 +271,8 @@ for i, (train_index, val_index) in enumerate(kf.split(train_idx)):
     val_X2 = X2[val_index, :]
     train_time = time[train_index]
     val_time = time[val_index]
-    train_event = time[train_index]
-    val_event = time[val_index]
+    train_event = event[train_index]
+    val_event = event[val_index]
     
     training_data = Data(train_X1, train_X2, train_time, train_event, device)
     val_data = Data(val_X1, val_X2, val_time, val_event, device)
