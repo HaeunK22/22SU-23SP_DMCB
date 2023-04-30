@@ -23,41 +23,24 @@ class Decoder(torch.nn.Module):
         return F.relu(self.linear2(x))
 
 
-# class Encoder2(torch.nn.Module):
-#     def __init__(self, D_in, H):
-#         super(Encoder2, self).__init__()
-#         self.linear1 = torch.nn.Linear(D_in, H)
-
-#     def forward(self, x):
-
-#         return F.relu(self.linear1(x))
-
-
-# class Decoder2(torch.nn.Module):
-#     def __init__(self, latent, H, D_out):
-#         super(Decoder2, self).__init__()
-#         self.linear1 = torch.nn.Linear(latent, H)
-#         self.linear2 = torch.nn.Linear(H, D_out)
-
-#     def forward(self, x):
-#         x = F.relu(self.linear1(x))
-#         return F.relu(self.linear2(x))
-
-
 class MLSurv(torch.nn.Module):
-    latent_dim = 64
 
-    def __init__(self, encoder1, decoder1, encoder2, decoder2):
+    def __init__(self, input_dim, dim1, dim2):
         super(MLSurv, self).__init__()
-        self.encoder1 = encoder1
-        self.decoder1 = decoder1
-        self.encoder2 = encoder2
-        self.decoder2 = decoder2
-        self._enc_mu = torch.nn.Linear(256, 64)
-        self._enc_log_sigma = torch.nn.Linear(256, 64)
+        self.encoder1 = Encoder(input_dim, dim1)
+        self.decoder1 = Decoder(dim2, dim1, input_dim)
+        self.encoder2 = Encoder(input_dim, dim1)
+        self.decoder2 = Decoder(dim2, dim1, input_dim)
+
+        self.hidden_layer1 = dim1
+        self.hidden_layer2 = dim2
+        
+        self._enc_mu = torch.nn.Linear(dim1, dim2)
+        self._enc_log_sigma = torch.nn.Linear(dim1, dim2)
+        self.output_intervals=torch.arange(0., 365 * 31, 365)
 
         self.risk_layer = torch.nn.Sequential(
-            torch.nn.Linear(96, 30, bias=True),
+            torch.nn.Linear(int(dim2/2*3), 30, bias=True),
             torch.nn.Sigmoid())
 
     def _sample_latent(self, h_enc):
@@ -67,7 +50,7 @@ class MLSurv(torch.nn.Module):
         mu = self._enc_mu(h_enc)
         log_sigma = self._enc_log_sigma(h_enc)
         sigma = torch.exp(log_sigma)
-        std_z = torch.from_numpy(np.random.normal(0, 1, size=sigma.size())).float()
+        std_z = torch.from_numpy(np.random.normal(0, 1, size=sigma.size())).float().to(mu.device)
 
         self.z_mean = mu
         self.z_sigma = sigma
@@ -75,23 +58,29 @@ class MLSurv(torch.nn.Module):
         return mu + sigma * Variable(std_z, requires_grad=False), mu, sigma  # Reparameterization trick
 
     def forward(self, x1, x2):
-        h_enc1 = self.encoder1(x1)
-        z1, mu1, sigma1 = self._sample_latent(h_enc1)
+        # VAE 1
+        h_enc1 = self.encoder1(x1)  # Linear : input_dim -> hidden_dim1(default:500)
+        z1, mu1, sigma1 = self._sample_latent(h_enc1)   # Latent vector, size hidden_dim2(default:200)
 
-        comm1, spe1 = z1.split([32, 32], dim=1)
-        decoder1_ = self.decoder1(z1)   # Decoder1 output
+        comm1, spe1 = z1.split([int(self.hidden_layer2/2), int(self.hidden_layer2/2)], dim=1)
+        decoder1_ = self.decoder1(z1)   # Decoder1 output : hidden_dim2(default:200) -> input_dim
 
+        # VAE 2
         h_enc2 = self.encoder2(x2)
         z2, mu2, sigma2 = self._sample_latent(h_enc2)
         
-        comm2, spe2 = z2.split([32, 32], dim=1)
-        decoder2_ = self.decoder2(z2)   # Decoder2 output
+        comm2, spe2 = z2.split([int(self.hidden_layer2/2), int(self.hidden_layer2/2)], dim=1)
+        decoder2_ = self.decoder2(z2)
 
+        # variational from latent 1 & inherent from latent 2
         connect1 = torch.cat([comm2, spe1], dim=1)
         decoder3_ = self.decoder1(connect1) # Decoder3 output
+        
+        # variational from latent 2 & inherent from latent 1
         connect2 = torch.cat([comm1, spe2], dim=1)
         decoder4_ = self.decoder2(connect2) # Decoder4 output
 
+        # input of final risk layer
         inputmlp_com = (comm1 + comm2) / 2
         inputmlp = torch.cat((inputmlp_com, spe1, spe2), 1) 
 
