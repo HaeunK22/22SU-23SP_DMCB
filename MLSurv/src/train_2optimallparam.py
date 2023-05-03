@@ -1,8 +1,8 @@
-"""training with RNA and Methylation with two optimizers."""
+"""training with RNA and Methylation with two optimizers for every parameters."""
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from MLSurv2optim import *
+from MLSurv import *
 from loss import SurvLoss, latent_loss
 from dataload import Data
 from earlystopping_inher import EarlyStopping
@@ -24,6 +24,7 @@ parser.add_argument('--feat_num', '-f', type=int, default=3000)
 parser.add_argument('--hiddendim', '-d', type=str, default='500,200')
 parser.add_argument('--patience', '-p', type=int, default= '100')
 parser.add_argument('--device', '-gpu', type=int, default=0)
+parser.add_argument('--trial', '-t', type=int, default=1)
 
 config = parser.parse_args()
 
@@ -35,8 +36,12 @@ input_dim = config.feat_num
 hiddendim = config.hiddendim
 patience = config.patience
 dim1, dim2 = [int(c) for c in hiddendim.split(',')]
+trial = config.trial
 
-path = "./../figures/test/" + '2optim,' + 'input' + str(input_dim) + 'hid' + hiddendim + 'c5:s5_proteincoding'
+learning_rate = 1e-4
+n_epochs = 3000
+
+path = "./../figures/test/" + '2optim,allparam'
 if not os.path.exists(path):
     os.mkdir(path)
 
@@ -53,7 +58,7 @@ label = pd.read_table(config.label)
 time, event = torch.tensor(label['time'], dtype=torch.float), torch.tensor(label['event'], dtype=torch.float)
 time, event = time.unsqueeze(1).to(device), event.unsqueeze(1).to(device)
 train_idx, test_idx, _, _ = train_test_split(np.arange(X1.shape[0]), event, test_size = 0.2, random_state = 1)
-train_idx, val_idx, _, _ = train_test_split(train_idx, event[train_idx], test_size = 0.25, random_state = 21)
+train_idx, val_idx, _, _ = train_test_split(train_idx, event[train_idx], test_size = 0.25, random_state = 20+trial)
 
 train_X1 = X1[train_idx, :]
 val_X1 = X1[val_idx, :]
@@ -80,11 +85,8 @@ test_dataloader = DataLoader(test_data, batch_size = test_idx.size)
 model = MLSurv(input_dim, dim1, dim2)
 model = model.to(device)
 
-learning_rate = 1e-4
-n_epochs = 3000
-
-optimizer1 = torch.optim.Adam(model.vae.parameters(), lr=learning_rate)
-optimizer2 = torch.optim.Adam(model.risk_layer.parameters(), lr=learning_rate)
+optimizer1 = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer2 = torch.optim.Adam(model.parameters(), lr=learning_rate)
 mse_loss = nn.MSELoss()
 surv_loss = SurvLoss(device)
 
@@ -124,29 +126,28 @@ def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, opt
     
     
     # early_stopping object
-    early_stopping = EarlyStopping(patience = patience, verbose = True, path = path + '/checkpointinher1.pt')
+    early_stopping = EarlyStopping(patience = patience, verbose = True, path = path + '/checkpointinher' + str(trial) + '.pt')
     
     for epoch in range(1, n_epochs + 1):
         model.train()
         for batch, (X1, X2, time_batch, event_batch) in enumerate(train_dataloader):
             # loss = 0
-            # Compute predition and loss
+            # Compute predition
             decoder1_, decoder2_, decoder3_, decoder4_, comm1, spe1, comm2, spe2, mu1, sigma1, mu2, sigma2, output, inputmlp = model.forward(X1, X2)
-            # VAE Loss
+            # Loss 1 = VAE loss + Disentangle loss
             vae_loss = mse_loss(decoder1_, X1) + mse_loss(decoder2_, X2) + mse_loss(decoder3_, X1) + mse_loss(decoder4_, X2) + \
                 latent_loss(mu1, sigma1) + latent_loss(mu2, sigma2)
-            # Disentangle Loss
             disentangle_loss = mse_loss(comm1, comm2)
-            # Loss 1
             loss1 = 2*vae_loss + disentangle_loss
+            # Backpropagation 1
+            optimizer1.zero_grad()
+            loss1.backward(retain_graph = True)
+            optimizer1.step()
+            
             # Loss 2 = Survival Prediction Loss
             surv_error = surv_loss.forward(risk = output, times = time_batch, events = event_batch, breaks = model.output_intervals.double().to(device))
             loss2 = surv_error
-                
-            # Backpropagation
-            optimizer1.zero_grad()
-            loss1.backward()
-            optimizer1.step()
+            # Backpropagation 2
             optimizer2.zero_grad()
             loss2.backward()
             optimizer2.step()
@@ -186,7 +187,7 @@ def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, opt
             totloss = loss1 + 600*loss2
             valid_losses1.append(loss1.item())
             valid_losses2.append(loss2.item())
-            totvalid_losses.append(totloss.item)
+            totvalid_losses.append(totloss.item())
             ### Delete if not needed ###
             v_vae_losses.append(vae_loss.item())
             v_disentangle_losses.append(disentangle_loss.item())
@@ -258,7 +259,7 @@ def train_model(model, train_dataloader, val_dataloader, patience, n_epochs, opt
             break
 
    # best model이 저장되어있는 last checkpoint를 로드한다.
-    model.load_state_dict(torch.load(path + '/checkpointinher1.pt'))
+    model.load_state_dict(torch.load(path + '/checkpointinher' + str(trial) + '.pt'))
     return  model, avg_train_losses1, avg_train_losses2, avg_valid_losses1, avg_valid_losses2, avg_train_acc, avg_valid_acc, avg_t_vae_losses, avg_t_disentangle_losses, avg_t_surv_losses
     
 # iterate over test dataset to check model performance
@@ -298,16 +299,11 @@ def test_loop(dataloader, model):
         
 # Visualize loss
 def visualize_loss(t_loss1, t_loss2, v_loss1, v_loss2, path):
-    fig = plt.figure(figsize=(10,8))
+    fig = plt.figure(figsize=(15,8))
     plt.plot(range(1,len(t_loss1)+1), t_loss1, label='Training Loss1')
     plt.plot(range(1,len(t_loss2)+1), t_loss2, label='Training Loss2')
     plt.plot(range(1,len(v_loss1)+1), v_loss1, label='Validation Loss1')
     plt.plot(range(1,len(v_loss2)+1), v_loss2, label='Validation Loss2')
-
-    # validation loss의 최저값 지점을 찾기
-    totloss = v_loss1 + 600*v_loss2
-    minposs = totloss.index(min(totloss))+1
-    plt.axvline(minposs, linestyle='--', color='r', label='Early Stopping Checkpoint')
 
     plt.xlabel('epochs')
     plt.ylabel('loss')
@@ -316,11 +312,11 @@ def visualize_loss(t_loss1, t_loss2, v_loss1, v_loss2, path):
     plt.legend()
     plt.tight_layout()
     # plt.show()
-    fig.savefig(path + '/1/loss_plot1.png', bbox_inches = 'tight')
+    fig.savefig(path + '/' + str(trial) + '/loss_plot' + str(trial) + '.png', bbox_inches = 'tight')
     
 # Visualize vae loss, disentangle loss, survival prediction loss
 def visualize_3train_loss(va_loss, dis_loss, sv_loss, path):
-    fig = plt.figure(figsize=(10,8))
+    fig = plt.figure(figsize=(15,8))
     plt.plot(range(1,len(va_loss)+1), va_loss, label='VAE Loss')
     plt.plot(range(1,len(dis_loss)+1), dis_loss, label='Disentangle Loss')
     plt.plot(range(1,len(sv_loss)+1), sv_loss, label='Survival Loss')
@@ -332,7 +328,7 @@ def visualize_3train_loss(va_loss, dis_loss, sv_loss, path):
     plt.legend()
     plt.tight_layout()
     # plt.show()
-    fig.savefig(path + '/1/3trainloss_plot1.png', bbox_inches = 'tight')
+    fig.savefig(path + '/' + str(trial) + '/3trainloss_plot' + str(trial) + '.png', bbox_inches = 'tight')
     
 # Visualize c-td     
 def visualize_cindex(t_acc, v_acc, test_acc, path):
@@ -348,11 +344,11 @@ def visualize_cindex(t_acc, v_acc, test_acc, path):
     plt.tight_layout()
     plt.title('test c-td:'+ str(test_acc))
     # plt.show()
-    fig.savefig(path + '/1/c-td_plot1.png', bbox_inches = 'tight')
+    fig.savefig(path + '/' + str(trial) + '/c-td_plot' + str(trial) + '.png', bbox_inches = 'tight')
     
-model, train_loss1, train_loss2, valid_loss1, valid_loss2, train_acc, valid_acc, va_loss, dis_loss, sv_loss = train_model(model, train_dataloader, test_dataloader, patience, n_epochs, optimizer1, optimizer2)
+model, train_loss1, train_loss2, valid_loss1, valid_loss2, train_acc, valid_acc, va_loss, dis_loss, sv_loss = train_model(model, train_dataloader, val_dataloader, patience, n_epochs, optimizer1, optimizer2)
 test_acc = test_loop(test_dataloader, model)
 visualize_loss(train_loss1, train_loss2, valid_loss1, valid_loss2, path)
 visualize_3train_loss(va_loss, dis_loss, sv_loss, path)
 visualize_cindex(train_acc, valid_acc, test_acc, path)
-torch.save((train_idx,val_idx,test_idx,model), path + "/model1.pt")
+torch.save((train_idx,val_idx,test_idx,model), path + "/model" + str(trial) + ".pt")
